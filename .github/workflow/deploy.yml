@@ -1,0 +1,40 @@
+name: Deploy to PythonAnywhere
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pythonanywhere
+
+      - name: Deploy to PythonAnywhere
+        env:
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
+          PA_USERNAME: ${{ secrets.PA_USERNAME }}
+        run: |
+          # Clone repository on PythonAnywhere
+          python -m pythonanywhere.scripts.pa_api_client.create_api_token --username $PA_USERNAME --token $PA_API_TOKEN
+          python -m pythonanywhere.scripts.pa_api_client.update_webapp --username $PA_USERNAME --token $PA_API_TOKEN --domain "$PA_USERNAME.pythonanywhere.com" --git-repo "https://github.com/${{ github.repository }}.git" --branch main --python-version 3.11
+          
+          # Execute custom script via API
+          curl -X POST \
+            -H "Authorization: Token $PA_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"command": "cd /home/'$PA_USERNAME'/'$PA_USERNAME'.pythonanywhere.com && pip install -r requirements.txt && cd /home/'$PA_USERNAME' && echo \"import sys; sys.path.append(\\\"/home/'$PA_USERNAME'/'$PA_USERNAME'.pythonanywhere.com\\\"); import bot\" > anime_play_bot_runner.py && python -m bot"}' \
+            https://www.pythonanywhere.com/api/v0/user/$PA_USERNAME/consoles/ 
